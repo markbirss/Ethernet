@@ -92,6 +92,18 @@ void EthernetClass::begin(uint8_t *mac, IPAddress ip, IPAddress dns, IPAddress g
 
 void EthernetClass::init(uint8_t sspin)
 {
+	// For SPE-T1L shield, toggle the reset pins
+	pinMode(5, OUTPUT);
+    pinMode(6, OUTPUT);
+	
+    digitalWrite(5, LOW);
+    digitalWrite(6, LOW);
+    delay(100);
+    
+    digitalWrite(5, HIGH);
+    digitalWrite(6, HIGH);
+    delay(100);
+
 	W5100.setSS(sspin);
 }
 
@@ -111,6 +123,7 @@ EthernetHardwareStatus EthernetClass::hardwareStatus()
 		case 51: return EthernetW5100;
 		case 52: return EthernetW5200;
 		case 55: return EthernetW5500;
+		case 11: return EthernetT1LShield;
 		default: return EthernetNoHardware;
 	}
 }

@@ -46,8 +46,10 @@
 #define SS_PIN_DEFAULT  10
 #endif
 
+#define MDC_PIN 2
+#define MDIO_PIN 3
 
-
+uint32_t PHY_ADDR;
 
 // W5100 controller instance
 uint8_t  W5100Class::chip = 0;
@@ -157,6 +159,32 @@ uint8_t W5100Class::init(void)
 			writeSnTX_SIZE(i, 0);
 		}
 #endif
+	// Try T1LShield last.  This simple chip uses fixed 4 byte frames
+	// for every 8 bit access.  Terribly inefficient, but so simple
+	// it recovers from "hearing" unsuccessful W5100 or W5200
+	// communication.  W5100 is also the only chip without a VERSIONR
+	// register for identification, so we check this last.
+	} else if (isT1LShield()) {
+		CH_BASE_MSB = 0x04;
+		#ifdef ETHERNET_LARGE_BUFFERS
+		#if MAX_SOCK_NUM <= 1
+				SSIZE = 8192;
+				writeTMSR(0x03);
+				writeRMSR(0x03);
+		#elif MAX_SOCK_NUM <= 2
+				SSIZE = 4096;
+				writeTMSR(0x0A);
+				writeRMSR(0x0A);
+		#else
+				SSIZE = 2048;
+				writeTMSR(0x55);
+				writeRMSR(0x55);
+		#endif
+				SMASK = SSIZE - 1;
+		#else
+				writeTMSR(0x55);
+				writeRMSR(0x55);
+		#endif
 	// Try W5100 last.  This simple chip uses fixed 4 byte frames
 	// for every 8 bit access.  Terribly inefficient, but so simple
 	// it recovers from "hearing" unsuccessful W5100 or W5200
@@ -164,25 +192,25 @@ uint8_t W5100Class::init(void)
 	// register for identification, so we check this last.
 	} else if (isW5100()) {
 		CH_BASE_MSB = 0x04;
-#ifdef ETHERNET_LARGE_BUFFERS
-#if MAX_SOCK_NUM <= 1
-		SSIZE = 8192;
-		writeTMSR(0x03);
-		writeRMSR(0x03);
-#elif MAX_SOCK_NUM <= 2
-		SSIZE = 4096;
-		writeTMSR(0x0A);
-		writeRMSR(0x0A);
-#else
-		SSIZE = 2048;
-		writeTMSR(0x55);
-		writeRMSR(0x55);
-#endif
-		SMASK = SSIZE - 1;
-#else
-		writeTMSR(0x55);
-		writeRMSR(0x55);
-#endif
+		#ifdef ETHERNET_LARGE_BUFFERS
+		#if MAX_SOCK_NUM <= 1
+				SSIZE = 8192;
+				writeTMSR(0x03);
+				writeRMSR(0x03);
+		#elif MAX_SOCK_NUM <= 2
+				SSIZE = 4096;
+				writeTMSR(0x0A);
+				writeRMSR(0x0A);
+		#else
+				SSIZE = 2048;
+				writeTMSR(0x55);
+				writeRMSR(0x55);
+		#endif
+				SMASK = SSIZE - 1;
+		#else
+				writeTMSR(0x55);
+				writeRMSR(0x55);
+		#endif
 	// No hardware seems to be present.  Or it could be a W5200
 	// that's heard other SPI communication if its chip select
 	// pin wasn't high when a SD card or other SPI chip was used.
@@ -269,6 +297,34 @@ uint8_t W5100Class::isW5500(void)
 	return 1;
 }
 
+uint8_t W5100Class::isT1LShield(void)
+{
+	uint8_t phystatus;
+
+	mdio_init();
+	PHY_ADDR = phy_id();
+
+	if (PHY_ADDR != 0xFF) {
+		chip = 11;
+		// Serial.println("chip is T1LShield\n");
+	}
+	else {
+		chip = 51;
+		// Serial.println("chip is W5100");
+		return 0;
+	}
+
+	if (!softReset()) return 0;
+	writeMR(0x10);
+	if (readMR() != 0x10) return 0;
+	writeMR(0x12);
+	if (readMR() != 0x12) return 0;
+	writeMR(0x00);
+	if (readMR() != 0x00) return 0;
+
+	return 1;
+}
+
 W5100Linkstatus W5100Class::getLinkStatus()
 {
 	uint8_t phystatus;
@@ -287,16 +343,145 @@ W5100Linkstatus W5100Class::getLinkStatus()
 		SPI.endTransaction();
 		if (phystatus & 0x01) return LINK_ON;
 		return LINK_OFF;
+	  case 11:
+		mdio_init();
+		phystatus = mdio_read(0x01);
+		if (phystatus & (1 << 2)) return LINK_ON;
+
+		// Serial.println("link down");
+		return LINK_OFF;
+
 	  default:
 		return UNKNOWN;
 	}
+}
+
+void W5100Class::mdio_init()
+{
+    pinMode(MDC_PIN, OUTPUT);
+    pinMode(MDIO_PIN, OUTPUT);
+    digitalWrite(MDC_PIN, LOW);
+    digitalWrite(MDIO_PIN, HIGH);
+
+	PHY_ADDR = phy_id();
+}
+
+uint8_t W5100Class::phy_id()
+{
+    uint16_t data;
+    for (uint8_t i = 0; i <= 7; i++) {
+
+		uint16_t reg_value = 0;
+
+		output_MDIO(0xFFFFFFFF, 32);
+		output_MDIO(0x06, 4);
+		output_MDIO(i, 5);
+		output_MDIO(2, 5);
+		turnaround_MDIO();
+		data = input_MDIO();
+		idle_MDIO();
+	
+        if (data == 0x0283) {
+            //Serial.print("Found PHY at address: ");
+            //Serial.println(i);
+            return i;
+        }
+    }
+    //Serial.println("PHY address not found!");
+    return 0xFF;
+}
+
+void W5100Class::output_MDIO(uint32_t val, uint32_t n)
+{
+	for (val <<= (32 - n); n; val <<= 1, n--) {
+		if (val & 0x80000000)
+			digitalWrite(MDIO_PIN, HIGH);
+		else
+      		digitalWrite(MDIO_PIN, LOW);
+			
+		mdio_delay(2);
+		digitalWrite(MDC_PIN, HIGH);
+		mdio_delay(2);
+		digitalWrite(MDC_PIN, LOW);
+	}
+}
+
+uint16_t W5100Class::input_MDIO()
+{
+	uint16_t val = 0;
+
+	for (int i = 0; i < 16; i++) {
+		val <<= 1;
+		digitalWrite(MDC_PIN, HIGH);
+		mdio_delay(2);
+		val |= digitalRead(MDIO_PIN);
+		digitalWrite(MDC_PIN, LOW);
+		mdio_delay(2);
+	}
+	return val;
+}
+
+void W5100Class::turnaround_MDIO()
+{
+	pinMode(MDIO_PIN, INPUT);
+	mdio_delay(1);
+	digitalWrite(MDC_PIN, HIGH);
+	mdio_delay(1);
+	digitalWrite(MDC_PIN, LOW);
+	mdio_delay(1);
+}
+
+void W5100Class::idle_MDIO()
+{
+	pinMode(MDIO_PIN, OUTPUT);
+	digitalWrite(MDIO_PIN, HIGH);
+	digitalWrite(MDC_PIN, HIGH);
+	mdio_delay(1);
+	digitalWrite(MDC_PIN, LOW);
+	mdio_delay(1);
+}
+
+void W5100Class::mdio_delay(uint32_t count)
+{ 
+	volatile uint32_t i; 
+	for (i = 0; i < count * 1; i++) 
+	{ 
+		__asm volatile ("nop"); 
+	} 
+}
+
+uint16_t W5100Class::mdio_read(uint8_t reg_addr)
+{
+    uint16_t reg_value = 0;
+
+	output_MDIO(0xFFFFFFFF, 32);
+	output_MDIO(0x06, 4);
+	output_MDIO(PHY_ADDR, 5);
+	output_MDIO(reg_addr, 5);
+	turnaround_MDIO();
+	reg_value = input_MDIO();
+	idle_MDIO();
+
+    return reg_value;
+}
+
+void W5100Class::mdio_write(uint8_t reg_addr, uint16_t val)
+{
+	output_MDIO(0xFFFFFFFF, 32);
+	output_MDIO(0x05, 4);
+	output_MDIO(PHY_ADDR, 5);
+	output_MDIO(reg_addr, 5);
+	output_MDIO(0x02, 2);
+	output_MDIO(val, 16);
+
+	idle_MDIO();
 }
 
 uint16_t W5100Class::write(uint16_t addr, const uint8_t *buf, uint16_t len)
 {
 	uint8_t cmd[8];
 
-	if (chip == 51) {
+	if (chip == 51 || chip == 11) {
 		for (uint16_t i=0; i<len; i++) {
 			setSS();
 			SPI.transfer(0xF0);
@@ -387,7 +572,7 @@ uint16_t W5100Class::read(uint16_t addr, uint8_t *buf, uint16_t len)
 {
 	uint8_t cmd[4];
 
-	if (chip == 51) {
+	if (chip == 51 || chip == 11) {
 		for (uint16_t i=0; i < len; i++) {
 			setSS();
 			#if 1

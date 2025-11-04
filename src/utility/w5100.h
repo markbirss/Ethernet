@@ -302,6 +302,17 @@ private:
   static uint8_t isW5100(void);
   static uint8_t isW5200(void);
   static uint8_t isW5500(void);
+  static uint8_t isT1LShield(void);
+
+  static void mdio_init();
+  static uint16_t mdio_read(uint8_t regaddr);
+  static void mdio_write(uint8_t regaddr, uint16_t val);
+  static void mdio_delay(uint32_t count);
+  static uint8_t phy_id();
+  static uint16_t input_MDIO();
+  static void output_MDIO(uint32_t val, uint32_t n);
+  static void turnaround_MDIO();
+  static void idle_MDIO();
 
 public:
   static uint8_t getChip(void) { return chip; }
@@ -313,14 +324,14 @@ public:
   static const uint16_t SMASK = 0x07FF;
 #endif
   static uint16_t SBASE(uint8_t socknum) {
-    if (chip == 51) {
+    if (chip == 51 || chip == 11) {
       return socknum * SSIZE + 0x4000;
     } else {
       return socknum * SSIZE + 0x8000;
     }
   }
   static uint16_t RBASE(uint8_t socknum) {
-    if (chip == 51) {
+    if (chip == 51 || chip == 11) {
       return socknum * SSIZE + 0x6000;
     } else {
       return socknum * SSIZE + 0xC000;
