@@ -246,7 +246,16 @@ uint8_t W5100Class::softReset(void)
 
 uint8_t W5100Class::isW5100(void)
 {
-	chip = 51;
+	if (PHY_ADDR != 0xFF) {
+		chip = 11;
+		// Serial.println("chip is T1LShield\n");
+		return 0;
+	}
+	else {
+		chip = 51;
+		// Serial.println("chip is W5100");
+	}
+
 	//Serial.println("w5100.cpp: detect W5100 chip");
 	if (!softReset()) return 0;
 	writeMR(0x10);
@@ -358,6 +367,17 @@ W5100Linkstatus W5100Class::getLinkStatus()
 
 void W5100Class::mdio_init()
 {
+	pinMode(5, OUTPUT);
+    pinMode(6, OUTPUT);
+	
+    digitalWrite(5, LOW);
+    digitalWrite(6, LOW);
+    delay(100);
+    
+    digitalWrite(5, HIGH);
+    digitalWrite(6, HIGH);
+    delay(100);
+
     pinMode(MDC_PIN, OUTPUT);
     pinMode(MDIO_PIN, OUTPUT);
     digitalWrite(MDC_PIN, LOW);

@@ -304,16 +304,6 @@ private:
   static uint8_t isW5500(void);
   static uint8_t isT1LShield(void);
 
-  static void mdio_init();
-  static uint16_t mdio_read(uint8_t regaddr);
-  static void mdio_write(uint8_t regaddr, uint16_t val);
-  static void mdio_delay(uint32_t count);
-  static uint8_t phy_id();
-  static uint16_t input_MDIO();
-  static void output_MDIO(uint32_t val, uint32_t n);
-  static void turnaround_MDIO();
-  static void idle_MDIO();
-
 public:
   static uint8_t getChip(void) { return chip; }
 #ifdef ETHERNET_LARGE_BUFFERS
@@ -344,6 +334,16 @@ public:
   }
   static void setSS(uint8_t pin) { ss_pin = pin; }
 
+  static void mdio_init();
+  static uint16_t mdio_read(uint8_t regaddr);
+  static void mdio_write(uint8_t regaddr, uint16_t val);
+  static void mdio_delay(uint32_t count);
+  static uint8_t phy_id();
+  static uint16_t input_MDIO();
+  static void output_MDIO(uint32_t val, uint32_t n);
+  static void turnaround_MDIO();
+  static void idle_MDIO();
+  
 private:
 #if defined(__AVR__)
 	static volatile uint8_t *ss_pin_reg;

@@ -92,18 +92,6 @@ void EthernetClass::begin(uint8_t *mac, IPAddress ip, IPAddress dns, IPAddress g
 
 void EthernetClass::init(uint8_t sspin)
 {
-	// For SPE-T1L shield, toggle the reset pins
-	pinMode(5, OUTPUT);
-    pinMode(6, OUTPUT);
-	
-    digitalWrite(5, LOW);
-    digitalWrite(6, LOW);
-    delay(100);
-    
-    digitalWrite(5, HIGH);
-    digitalWrite(6, HIGH);
-    delay(100);
-
 	W5100.setSS(sspin);
 }
 
